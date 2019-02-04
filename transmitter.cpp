@@ -216,7 +216,7 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
             throw ErrorReporter("DMA channel number out of range (0 - 15)");
         }
 
-        if (!allocateMemory(sizeof(uint32_t) * ((2 * bufferSize) + 1) + sizeof(DMAControllBlock) * (2 * bufferSize))) {
+        if (!allocateMemory(sizeof(uint32_t) * (bufferSize) + 1) + sizeof(DMAControllBlock) * (2 * bufferSize))) {
             delete samples;
             throw ErrorReporter("Cannot allocate memory");
         }
@@ -256,8 +256,8 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
 #endif
 
         volatile DMAControllBlock *dmaCb = (DMAControllBlock *)memAllocated;
-        volatile uint32_t *clkDiv = (uint32_t *)memAllocated + 2 * (sizeof(DMAControllBlock) / sizeof(uint32_t)) * bufferSize;
-        volatile uint32_t *pwmFifoData = (uint32_t *)memAllocated + 2 * ((sizeof(DMAControllBlock) / sizeof(uint32_t)) + 1) * bufferSize;
+        volatile unsigned *clkDiv = (uint32_t *)((uint32_t)dmaCb + 2 * sizeof(DMAControllBlock) * bufferSize);
+        volatile unsigned *pwmFifoData = (uint32_t *)((uint32_t)clkDiv + sizeof(uint32_t) * bufferSize);
         for (i = 0; i < bufferSize; i++) {
             value = (*samples)[i].getMonoValue();
 #ifndef NO_PREEMP
