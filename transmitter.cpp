@@ -210,26 +210,28 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
     bool isError = false;
     string errorMessage;
 
+    volatile ClockRegisters *clk0 = (ClockRegisters *)getPeripheral(CLK0_BASE_OFFSET);
+    volatile uint32_t *gpio = (uint32_t *)getPeripheral(GPIO_BASE_OFFSET);
+    if (!clockInitialized) {
+        clk0->ctl = (0x5A << 24) | 0x06;
+        usleep(1000);
+        clk0->div = (0x5A << 24) | *clockDivisor;
+        clk0->ctl = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
+        *gpio = (*gpio & 0xFFFF8FFF) | (0x01 << 14);
+        clockInitialized = true;
+    }
+
     if (dmaChannel != 0xFF) {
         if (dmaChannel > 15) {
             delete samples;
+            clk0->ctl = (0x5A << 24) | 0x06;
             throw ErrorReporter("DMA channel number out of range (0 - 15)");
         }
 
         if (!allocateMemory(sizeof(uint32_t) * (bufferSize) + 1) + sizeof(DMAControllBlock) * (2 * bufferSize))) {
             delete samples;
-            throw ErrorReporter("Cannot allocate memory");
-        }
-
-        volatile ClockRegisters *clk0 = (ClockRegisters *)getPeripheral(CLK0_BASE_OFFSET);
-        volatile uint32_t *gpio = (uint32_t *)getPeripheral(GPIO_BASE_OFFSET);
-        if (!clockInitialized) {
             clk0->ctl = (0x5A << 24) | 0x06;
-            usleep(1000);
-            clk0->div = (0x5A << 24) | clockDivisor;
-            clk0->ctl = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
-            *gpio = (*gpio & 0xFFFF8FFF) | (0x01 << 14);
-            clockInitialized = true;
+            throw ErrorReporter("Cannot allocate memory");
         }
 
         volatile ClockRegisters *pwmClk = (ClockRegisters *)getPeripheral(PWMCLK_BASE_OFFSET);
@@ -330,26 +332,24 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
 
         freeMemory();
         transmitting = false;
-
-        if (!preserveCarrier) {
-            clk0->ctl = (0x5A << 24) | 0x06;
-        }
     } else {
         uint32_t sampleOffset = 0;
         vector<Sample> *buffer = samples;
 
-        void *transmitterParams[5] = {
+        void *transmitterParams[6] = {
             (void *)&buffer,
             (void *)&sampleOffset,
             (void *)&clockDivisor,
             (void *)&divisorRange,
-            (void *)&header.sampleRate
+            (void *)&header.sampleRate,
+            (void *)clk0
         };
 
         pthread_t thread;
         int returnCode = pthread_create(&thread, NULL, &Transmitter::transmit, (void *)transmitterParams);
         if (returnCode) {
             delete samples;
+            clk0->ctl = (0x5A << 24) | 0x06;
             ostringstream oss;
             oss << "Cannot create transmitter thread (code: " << returnCode << ")";
             throw ErrorReporter(oss.str());
@@ -384,6 +384,9 @@ void Transmitter::play(WaveReader &reader, double frequency, double bandwidth, u
             delete buffer;
         }
     }
+    if (!preserveCarrier) {
+        clk0->ctl = (0x5A << 24) | 0x06;
+    }
     if (isError) {
         throw ErrorReporter(errorMessage);
     }
@@ -396,6 +399,7 @@ void *Transmitter::transmit(void *params)
     uint32_t *clockDivisor = (uint32_t *)((void **)params)[2];
     uint32_t *divisorRange = (uint32_t *)((void **)params)[3];
     uint32_t *sampleRate = (uint32_t *)((void **)params)[4];
+    volatile ClockRegisters *clk0 = (ClockRegisters *)((void **)params)[5]
 
     uint32_t offset, length, prevOffset;
     vector<Sample> *samples = NULL;
@@ -403,19 +407,8 @@ void *Transmitter::transmit(void *params)
     float value;
 
 #ifndef NO_PREEMP
-	PreEmp preEmp(*sampleRate);
+    PreEmp preEmp(*sampleRate);
 #endif
-
-    volatile ClockRegisters *clk0 = (ClockRegisters *)getPeripheral(CLK0_BASE_OFFSET);
-    volatile uint32_t *gpio = (uint32_t *)getPeripheral(GPIO_BASE_OFFSET);
-    if (!clockInitialized) {
-        clk0->ctl = (0x5A << 24) | 0x06;
-        usleep(1000);
-        clk0->div = (0x5A << 24) | *clockDivisor;
-        clk0->ctl = (0x5A << 24) | (0x01 << 9) | (0x01 << 4) | 0x06;
-        *gpio = (*gpio & 0xFFFF8FFF) | (0x01 << 14);
-        clockInitialized = true;
-    }
 
     volatile TimerRegisters *timer = (TimerRegisters *)getPeripheral(TIMER_BASE_OFFSET);
     uint64_t current = *(uint64_t *)&timer->low;
@@ -456,10 +449,6 @@ void *Transmitter::transmit(void *params)
             }
         }
         delete samples;
-    }
-
-    if (!preserveCarrier) {
-        clk0->ctl = (0x5A << 24) | 0x06;
     }
 
     return NULL;
