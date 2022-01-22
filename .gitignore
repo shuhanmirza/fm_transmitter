@@ -1,2 +1,4 @@
 *.o
-fm_transmitter
+.idea
+playlist/*.mp3
+current_music.wav

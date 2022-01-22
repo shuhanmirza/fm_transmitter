@@ -1,4 +1,4 @@
-# FM Transmitter
+# Raspberry Pi FM Transmitter
 Use the Raspberry Pi as an FM transmitter. Works on every Raspberry Pi board.
 
 Just get an FM receiver, connect a 20 - 40 cm plain wire to the Raspberry Pi's GPIO4 (PIN 7 on GPIO header) to act as an antenna, and you are ready for broadcasting.
@@ -16,8 +16,8 @@ sudo apt-get install libraspberrypi-dev
 ```  
 After installing dependencies clone this repository and use `make` command in order to build executable:
 ```
-git clone https://github.com/markondej/fm_transmitter
-cd fm_transmitter
+git clone https://github.com/shuhanmirza/fm_transmitter
+cd fm_transmitter/fm_transmitter
 make
 ```
 After a successful build you can start transmitting by executing the "fm_transmitter" program:
@@ -71,6 +71,13 @@ In cases of a performance drop down use ```plughw:1,0``` instead of ```hw:1,0```
 ```
 arecord -D plughw:1,0 -c1 -d 0 -r 22050 -f S16_LE | sudo ./fm_transmitter -f 100.6 -
 ```
+
+### Playing playlist
+Have sox installed in your raspberry pi. After that put your desired music mp3 files in the "playlist" folder and run "run_playlist.py". This python script will convert the mp3 file randomly to wav file and transmit that music.
+```commandline
+python run_playlist.py
+```
+
 ## Legal note
 Please keep in mind that transmitting on certain frequencies without special permissions may be illegal in your country.
 ## New features
